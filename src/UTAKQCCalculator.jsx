@@ -312,7 +312,6 @@ function useAnimatedNumber(value, duration = 600) {
 // ============================================================================
 
 export default function UTAKQCCalculator() {
-  const [previewVersion, setPreviewVersion] = useState('B');
   const [framingView, setFramingView] = useState('roi');
   const [discipline, setDiscipline] = useState('forensic_tox');
   const [labSize, setLabSize] = useState('mid');
@@ -473,14 +472,6 @@ export default function UTAKQCCalculator() {
         }
       `}</style>
 
-      {/* ============ EDITOR TOGGLE ============ */}
-      <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] tracking-widest uppercase backdrop-blur-md" style={{ backgroundColor: 'rgba(250,250,250,0.85)', border: `1px solid ${COLORS.denseNavy}30` }}>
-        <span style={{ color: `${COLORS.denseNavy}80` }}>Preview:</span>
-        <button onClick={() => setPreviewVersion('A')} className="transition-colors" style={{ color: previewVersion === 'A' ? COLORS.denseNavy : `${COLORS.denseNavy}50` }}>A</button>
-        <span style={{ color: `${COLORS.denseNavy}30` }}>/</span>
-        <button onClick={() => setPreviewVersion('B')} className="transition-colors" style={{ color: previewVersion === 'B' ? COLORS.denseNavy : `${COLORS.denseNavy}50` }}>B</button>
-      </div>
-
       {/* ============ HERO ============ */}
       <section className="relative px-6 md:px-16 pt-28 pb-20 md:pt-40 md:pb-28 max-w-7xl mx-auto overflow-hidden" style={{ width: '100%' }}>
 
@@ -541,10 +532,12 @@ export default function UTAKQCCalculator() {
 
         {/* Content — single column constrained by max-width */}
         <div className="relative z-10 fade-up" style={{ maxWidth: '680px' }}>
-          {/* REAL X Wordmark */}
-          <div className="flex items-baseline gap-4 mb-12 md:mb-14">
-            <span className="text-3xl md:text-4xl font-bold tracking-wider" style={{ color: COLORS.denseNavy }}>REAL</span>
-            <span className="text-6xl md:text-7xl font-thin italic leading-none" style={{ color: COLORS.sampleTeal, fontFamily: "'Sora', serif" }}>x</span>
+          {/* REALx Wordmark — navy block to match the email */}
+          <div className="inline-block px-10 py-6 md:px-14 md:py-7 mb-12 md:mb-14" style={{ backgroundColor: COLORS.denseNavy }}>
+            <div className="flex items-baseline gap-3">
+              <span className="text-3xl md:text-4xl font-bold tracking-wider" style={{ color: COLORS.cleanWhite }}>REAL</span>
+              <span className="text-4xl md:text-5xl italic leading-none" style={{ color: COLORS.sampleTeal, fontFamily: "Georgia, 'Times New Roman', serif" }}>x</span>
+            </div>
           </div>
 
           <h1 className="text-5xl md:text-6xl lg:text-7xl font-light tracking-tight leading-[1.02] mb-10 md:mb-12" style={{ color: COLORS.denseNavy }}>
