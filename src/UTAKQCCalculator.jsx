@@ -1,5 +1,30 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Info, ChevronDown, ArrowRight, Calendar, Mail, X, Check, Sparkles } from 'lucide-react';
+import { Info, ChevronDown, ArrowRight, Calendar, Mail, X, Check, Sparkles, Lock } from 'lucide-react';
+
+// ============================================================================
+// CONFIGURATION — update these values as needed
+// ============================================================================
+
+// ─── HUBSPOT INTEGRATION ─────────────────────────────────────────────────────
+// Portal ID lives in HubSpot → click your account name/avatar top-right → "Hub ID"
+// Form GUID lives in HubSpot → Marketing → Forms → your form → Actions → Embed
+// Look for `formId: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"` in the embed snippet.
+const HUBSPOT_PORTAL_ID = '21153233';
+const HUBSPOT_FORM_GUID = 'REPLACE_WITH_ACTUAL_FORM_GUID'; // TODO
+
+// ─── SWEEPSTAKES ─────────────────────────────────────────────────────────────
+// The official rules URL. Replace '#' once the rules page is published.
+const SWEEPSTAKES_RULES_URL = '#'; // TODO
+
+// The entry window. Tool automatically detects whether "now" is inside this
+// window and switches between sweepstakes-aware copy and standard copy.
+const SWEEPSTAKES_START = '2026-07-26T00:00:00';
+const SWEEPSTAKES_END = '2026-07-30T23:59:59';
+
+// ─── OUTREACH ────────────────────────────────────────────────────────────────
+// Andrew's Calendly link for the "Walk through it with Andrew" CTA.
+const CALENDLY_URL = 'https://calendly.com/ahartmann-utak/30min';
+
 
 // ============================================================================
 // UTAK BRAND COLORS (from brand guide)
@@ -19,16 +44,14 @@ const COLORS = {
 };
 
 // ============================================================================
-// HUBSPOT INTEGRATION
-// ============================================================================
-const HUBSPOT_PORTAL_ID = '21153233';
-const HUBSPOT_FORM_GUID = 'df8ea2a5-2252-4ec0-9c2b-ac18418cb109';
-
-// ============================================================================
 // RESEARCH-BACKED CONSTANTS
 // ============================================================================
 const FAILURE_RATE = 0.12;
-const COMPLIANCE_HOURS_PER_YEAR = 100;
+const COMPLIANCE_HOURS_BY_SIZE = {
+  small: 60,   // Basic CAP prep, minimum CLIA docs, single analyst
+  mid: 100,    // Independent/hospital lab — moderate documentation load
+  large: 140   // Reference labs, multiple inspections, tighter documentation
+};
 const TRAINING_HOURS_PER_PREP_PER_PERSON = 6;
 const VENDOR_MGMT_HOURS_PER_PREP = 6;
 
@@ -312,6 +335,7 @@ function useAnimatedNumber(value, duration = 600) {
 // ============================================================================
 
 export default function UTAKQCCalculator() {
+  const [previewVersion, setPreviewVersion] = useState('B');
   const [framingView, setFramingView] = useState('roi');
   const [discipline, setDiscipline] = useState('forensic_tox');
   const [labSize, setLabSize] = useState('mid');
@@ -330,7 +354,42 @@ export default function UTAKQCCalculator() {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [emailGateOpen, setEmailGateOpen] = useState(false);
   const [emailValue, setEmailValue] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [company, setCompany] = useState('');
   const [emailSubmitted, setEmailSubmitted] = useState(false);
+  const [resultsUnlocked, setResultsUnlocked] = useState(false);
+
+  // Sweepstakes window detection — ADLM 2026 in Anaheim, July 26 through 30
+  const inSweepstakesWindow = (() => {
+    const now = new Date();
+    const start = new Date(SWEEPSTAKES_START);
+    const end = new Date(SWEEPSTAKES_END);
+    return now >= start && now <= end;
+  })();
+
+  // HubSpot form submission
+  const submitToHubSpot = async ({ firstName, lastName, email, company, inSweepstakesWindow }) => {
+    try {
+      await fetch(`https://api.hsforms.com/submissions/v3/integration/submit/${HUBSPOT_PORTAL_ID}/${HUBSPOT_FORM_GUID}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fields: [
+            { name: 'firstname', value: firstName },
+            { name: 'lastname', value: lastName },
+            { name: 'email', value: email },
+            { name: 'company', value: company || '' },
+            { name: 'entry_source', value: inSweepstakesWindow ? 'REALx - ADLM 2026 Sweepstakes' : 'REALx - Standard' }
+          ],
+          context: { pageUri: window.location.href, pageName: 'REAL X Calculator' }
+        })
+      });
+    } catch (err) {
+      // Fail silently — better UX than blocking the user on integration issues
+      console.error('HubSpot submission failed:', err);
+    }
+  };
 
   const handleDisciplineChange = (newDiscipline) => {
     setDiscipline(newDiscipline);
@@ -354,11 +413,14 @@ export default function UTAKQCCalculator() {
     // Derive labor cost per lot from hours × rate
     const laborCostPerLot = laborHoursPerLot * hourlyRate;
 
+    // Compliance hours scale with lab size
+    const complianceHours = COMPLIANCE_HOURS_BY_SIZE[labSize] || 100;
+
     const annualMaterialCost = lots * materialCost;
     const annualLaborCost = lots * laborCostPerLot;
     const directCost = annualMaterialCost + annualLaborCost;
     const failureCost = lots * FAILURE_RATE * (materialCost + laborCostPerLot);
-    const complianceCost = COMPLIANCE_HOURS_PER_YEAR * hourlyRate;
+    const complianceCost = complianceHours * hourlyRate;
     const trainingCost = preps * people * TRAINING_HOURS_PER_PREP_PER_PERSON * hourlyRate;
     const vendorMgmtCost = preps * VENDOR_MGMT_HOURS_PER_PREP * hourlyRate;
     const vendorTrainingCost = trainingCost + vendorMgmtCost;
@@ -366,7 +428,7 @@ export default function UTAKQCCalculator() {
 
     // Opportunity cost: labor hours per lot is now a direct input
     const annualLaborHoursOnPrep = lots * laborHoursPerLot;
-    const overheadHours = COMPLIANCE_HOURS_PER_YEAR +
+    const overheadHours = complianceHours +
       (preps * people * TRAINING_HOURS_PER_PREP_PER_PERSON) +
       (preps * VENDOR_MGMT_HOURS_PER_PREP);
     const totalQCHours = annualLaborHoursOnPrep + overheadHours;
@@ -378,59 +440,15 @@ export default function UTAKQCCalculator() {
       totalTrueCost, opportunityCost,
       totalQCHours: Math.round(totalQCHours),
       samplesNotProcessed: Math.round(samplesNotProcessed),
-      laborCostPerLot: Math.round(laborCostPerLot)
+      laborCostPerLot: Math.round(laborCostPerLot),
+      complianceHours
     };
-  }, [lots, preps, materialCost, laborHoursPerLot, people, hourlyRate, samplesPerHour, revenuePerTest]);
+  }, [lots, preps, materialCost, laborHoursPerLot, people, hourlyRate, samplesPerHour, revenuePerTest, labSize]);
 
   const animatedTotal = useAnimatedNumber(Math.round(results.totalTrueCost));
   const animatedOpp = useAnimatedNumber(Math.round(results.opportunityCost));
 
   const fmt = (n) => `$${Math.round(n).toLocaleString('en-US')}`;
-
-  const handleHubSpotSubmit = async () => {
-    if (!emailValue.includes('@')) return;
-
-    const formData = {
-      fields: [
-        { name: 'email', value: emailValue },
-        { name: 'realx_discipline', value: DISCIPLINE_DEFAULTS[discipline].label },
-        { name: 'realx_lab_size', value: LAB_SIZE_LABELS[labSize] },
-        { name: 'realx_lots_per_year', value: lots.toString() },
-        { name: 'realx_material_cost_per_lot', value: materialCost.toString() },
-        { name: 'realx_labor_hours_per_lot', value: laborHoursPerLot.toString() },
-        { name: 'realx_hourly_rate', value: hourlyRate.toString() },
-        { name: 'realx_true_annual_cost', value: Math.round(results.totalTrueCost).toString() },
-        { name: 'realx_opportunity_cost', value: Math.round(results.opportunityCost).toString() },
-        { name: 'realx_total_qc_hours', value: results.totalQCHours.toString() },
-        { name: 'realx_samples_not_processed', value: results.samplesNotProcessed.toString() }
-      ],
-      context: {
-        pageUri: window.location.href,
-        pageName: document.title
-      }
-    };
-
-    try {
-      const response = await fetch(
-        `https://api.hsforms.com/submissions/v3/integration/submit/${HUBSPOT_PORTAL_ID}/${HUBSPOT_FORM_GUID}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData)
-        }
-      );
-
-      if (response.ok) {
-        setEmailSubmitted(true);
-      } else {
-        console.error('HubSpot submission failed:', await response.text());
-        alert('Something went wrong. Please try again or email welovecontrol@utak.com directly.');
-      }
-    } catch (error) {
-      console.error('Submission error:', error);
-      alert('Something went wrong. Please try again or email welovecontrol@utak.com directly.');
-    }
-  };
 
   return (
     <div className="min-h-screen" style={{ fontFamily: "'Sora', system-ui, sans-serif", backgroundColor: COLORS.pureBase, color: COLORS.denseNavy }}>
@@ -471,6 +489,14 @@ export default function UTAKQCCalculator() {
           font-variant-numeric: tabular-nums;
         }
       `}</style>
+
+      {/* ============ EDITOR TOGGLE ============ */}
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] tracking-widest uppercase backdrop-blur-md" style={{ backgroundColor: 'rgba(250,250,250,0.85)', border: `1px solid ${COLORS.denseNavy}30` }}>
+        <span style={{ color: `${COLORS.denseNavy}80` }}>Preview:</span>
+        <button onClick={() => setPreviewVersion('A')} className="transition-colors" style={{ color: previewVersion === 'A' ? COLORS.denseNavy : `${COLORS.denseNavy}50` }}>A</button>
+        <span style={{ color: `${COLORS.denseNavy}30` }}>/</span>
+        <button onClick={() => setPreviewVersion('B')} className="transition-colors" style={{ color: previewVersion === 'B' ? COLORS.denseNavy : `${COLORS.denseNavy}50` }}>B</button>
+      </div>
 
       {/* ============ HERO ============ */}
       <section className="relative px-6 md:px-16 pt-28 pb-20 md:pt-40 md:pb-28 max-w-7xl mx-auto overflow-hidden" style={{ width: '100%' }}>
@@ -532,12 +558,10 @@ export default function UTAKQCCalculator() {
 
         {/* Content — single column constrained by max-width */}
         <div className="relative z-10 fade-up" style={{ maxWidth: '680px' }}>
-          {/* REALx Wordmark — navy block to match the email */}
-          <div className="inline-block px-10 py-6 md:px-14 md:py-7 mb-12 md:mb-14" style={{ backgroundColor: COLORS.denseNavy }}>
-            <div className="flex items-baseline gap-3">
-              <span className="text-3xl md:text-4xl font-bold tracking-wider" style={{ color: COLORS.cleanWhite }}>REAL</span>
-              <span className="text-4xl md:text-5xl italic leading-none" style={{ color: COLORS.sampleTeal, fontFamily: "Georgia, 'Times New Roman', serif" }}>x</span>
-            </div>
+          {/* REAL X Wordmark */}
+          <div className="flex items-baseline gap-4 mb-12 md:mb-14">
+            <span className="text-3xl md:text-4xl font-bold tracking-wider" style={{ color: COLORS.denseNavy }}>REAL</span>
+            <span className="text-6xl md:text-7xl font-thin italic leading-none" style={{ color: COLORS.sampleTeal, fontFamily: "'Sora', serif" }}>x</span>
           </div>
 
           <h1 className="text-5xl md:text-6xl lg:text-7xl font-light tracking-tight leading-[1.02] mb-10 md:mb-12" style={{ color: COLORS.denseNavy }}>
@@ -635,13 +659,13 @@ export default function UTAKQCCalculator() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-12 md:gap-16 mb-16 md:mb-20">
+          <div className="grid md:grid-cols-2 gap-12 md:gap-16 mb-12 md:mb-16">
             <div>
               <p className="text-xs tracking-[0.3em] uppercase mb-8 font-semibold" style={{ color: COLORS.testingCyan }}>
                 True Annual Cost
               </p>
-              <p className="number-display text-6xl md:text-8xl font-extralight tracking-tighter mb-6" style={{ color: COLORS.cleanWhite }}>
-                ${animatedTotal.toLocaleString('en-US')}
+              <p className="number-display text-6xl md:text-8xl font-extralight tracking-tighter mb-6" style={{ color: resultsUnlocked ? COLORS.cleanWhite : `${COLORS.cleanWhite}30` }}>
+                {resultsUnlocked ? `$${animatedTotal.toLocaleString('en-US')}` : '$———'}
               </p>
               <p className="text-sm font-light leading-relaxed max-w-sm" style={{ color: `${COLORS.cleanWhite}B0` }}>
                 Materials, labor, rework, compliance, and vendor management. All of it, across the year.
@@ -652,14 +676,37 @@ export default function UTAKQCCalculator() {
               <p className="text-xs tracking-[0.3em] uppercase mb-8 font-semibold" style={{ color: COLORS.expertGreen }}>
                 Opportunity Cost
               </p>
-              <p className="number-display text-6xl md:text-8xl font-extralight tracking-tighter mb-6" style={{ color: COLORS.cleanWhite }}>
-                ${animatedOpp.toLocaleString('en-US')}
+              <p className="number-display text-6xl md:text-8xl font-extralight tracking-tighter mb-6" style={{ color: resultsUnlocked ? COLORS.cleanWhite : `${COLORS.cleanWhite}30` }}>
+                {resultsUnlocked ? `$${animatedOpp.toLocaleString('en-US')}` : '$———'}
               </p>
               <p className="text-sm font-light leading-relaxed max-w-sm" style={{ color: `${COLORS.cleanWhite}B0` }}>
-                Revenue your team could have generated if those <span style={{ color: COLORS.expertGreen, fontWeight: 500 }}>{results.totalQCHours.toLocaleString()} hours</span> went to billable testing.
+                Revenue your team could have generated if those <span style={{ color: COLORS.expertGreen, fontWeight: 500 }}>{resultsUnlocked ? results.totalQCHours.toLocaleString() : '———'} hours</span> went to billable testing.
               </p>
             </div>
           </div>
+
+          {/* Reveal CTA (only when locked) */}
+          {!resultsUnlocked && (
+            <div className="mb-12 md:mb-16 fade-up">
+              <button
+                onClick={() => setEmailGateOpen(true)}
+                className="group inline-flex items-center gap-4 px-8 py-5 transition-all hover:gap-6"
+                style={{ backgroundColor: COLORS.sampleTeal, color: COLORS.denseNavy }}
+              >
+                <Lock className="w-4 h-4" strokeWidth={2} />
+                <span className="text-sm tracking-widest uppercase font-semibold">
+                  {inSweepstakesWindow ? 'Reveal your result + enter to win $250' : 'Reveal your result'}
+                </span>
+                <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
+              </button>
+              {inSweepstakesWindow && (
+                <p className="text-xs font-light mt-4 max-w-md" style={{ color: `${COLORS.cleanWhite}70` }}>
+                  Open to ADLM 2026 attendees and remote entrants. One entry per person.{' '}
+                  <a href={SWEEPSTAKES_RULES_URL} className="underline hover:opacity-80" style={{ color: COLORS.testingCyan }}>Official rules</a>.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="relative p-8 md:p-10" style={{ border: `1px solid ${COLORS.sampleTeal}80`, backgroundColor: `${COLORS.sampleTeal}15`, backdropFilter: 'blur(8px)' }}>
             <div className="flex items-start gap-4">
@@ -790,7 +837,7 @@ export default function UTAKQCCalculator() {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-px" style={{ backgroundColor: `${COLORS.denseNavy}15` }}>
             <BreakdownCell number="A" label="Direct" value={fmt(results.directCost)} description="Materials and labor across all lots prepared this year." citation="¹" accentColor={COLORS.sampleTeal} />
             <BreakdownCell number="B" label="Failure & Rework" value={fmt(results.failureCost)} description="Failed batches that need to be remade. Around 12% of lots, based on industry sigma data." citation="²" accentColor={COLORS.sampleTeal} />
-            <BreakdownCell number="C" label="Compliance" value={fmt(results.complianceCost)} description="Audit prep, document retention, and CLIA/CAP documentation overhead." citation="³" accentColor={COLORS.expertGreen} />
+            <BreakdownCell number="C" label="Compliance" value={fmt(results.complianceCost)} description="Audit prep, document retention, and CLIA/CAP overhead. Hours scale with lab size." citation="³" accentColor={COLORS.expertGreen} />
             <BreakdownCell number="D" label="Vendor & Training" value={fmt(results.vendorTrainingCost)} description="Procurement, lot release, training records, and annual competency assessment." citation="⁴" accentColor={COLORS.expertGreen} />
           </div>
         </div>
@@ -817,7 +864,7 @@ export default function UTAKQCCalculator() {
 
         <div className="grid md:grid-cols-2 gap-6 relative z-10">
           <a
-            href="https://calendly.com/ahartmann-utak/30min"
+            href={CALENDLY_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="group relative overflow-hidden p-10 md:p-12 transition-all duration-500 cursor-pointer block"
@@ -853,12 +900,12 @@ export default function UTAKQCCalculator() {
             </div>
 
             <Mail className="w-7 h-7 mb-12 relative z-10" strokeWidth={1.2} style={{ color: COLORS.denseNavy }} />
-            <p className="text-xs tracking-[0.3em] uppercase mb-4 font-semibold relative z-10" style={{ color: `${COLORS.denseNavy}80` }}>Option B · Email</p>
+            <p className="text-xs tracking-[0.3em] uppercase mb-4 font-semibold relative z-10" style={{ color: `${COLORS.denseNavy}80` }}>Option B · PDF</p>
             <h3 className="text-2xl md:text-3xl font-light tracking-tight mb-5 relative z-10" style={{ color: COLORS.denseNavy }}>
               Send the full breakdown
             </h3>
             <p className="text-sm font-light mb-10 max-w-sm leading-relaxed relative z-10" style={{ color: `${COLORS.denseNavy}A0` }}>
-              We'll email a breakdown with your inputs, the calculations, and the full methodology. No newsletter signup. No follow-up unless you ask.
+              We'll email a PDF with your inputs, the calculations, and the full methodology. No newsletter signup. No follow-up unless you ask.
             </p>
             <div className="flex items-center gap-3 transition-all duration-500 group-hover:gap-5 relative z-10" style={{ color: COLORS.denseNavy }}>
               <span className="text-sm font-light tracking-wide">Send to my inbox</span>
@@ -894,10 +941,10 @@ export default function UTAKQCCalculator() {
                 'Peer-reviewed Sigma metrics studies show ~26% of clinical chemistry test applications fall below three-sigma minimum performance. We use 12% as a conservative midpoint for in-house QC prep failure attributable to operator, reconstitution, and storage errors.',
                 'Source: Westgard publications on lab sigma performance benchmarking.'
               ]} />
-              <SourceItem superscript="³" title="Compliance (100 hrs/year)" formula="100 hours × fully loaded hourly rate" sources={[
+              <SourceItem superscript="³" title={`Compliance (${results.complianceHours} hrs/year, scaled to lab size)`} formula={`${results.complianceHours} hours × fully loaded hourly rate`} sources={[
                 'CAP Laboratory Accreditation Program: biennial inspections, 3 to 4 month pre-inspection planning, advance document review, and ongoing checklist compliance.',
                 'CLIA (42 CFR Part 493) documentation requirements including 2-year retention of temperature logs and corrective action records.',
-                'Mid-point of 80 to 120 hours/year for QC-related compliance work in mid-size labs.'
+                'Compliance overhead scales with lab size: small labs 60 hrs/year, mid-size 100 hrs/year, reference labs 140 hrs/year. Small labs run lighter documentation loads than large reference operations like Arup or Quest.'
               ]} />
               <SourceItem superscript="⁴" title="Vendor & Training" formula="(Preps × 6 hrs × people × rate) + (Preps × 6 hrs × rate)" sources={[
                 'CLSI QMS03 Training and Competence Assessment, 4th Edition: framework for personnel competency.',
@@ -945,24 +992,89 @@ export default function UTAKQCCalculator() {
       {emailGateOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-md px-6" style={{ backgroundColor: `${COLORS.denseNavy}80` }}>
           <div className="relative max-w-md w-full p-10 md:p-12 fade-up" style={{ backgroundColor: COLORS.pureBase }}>
-            <button onClick={() => { setEmailGateOpen(false); setEmailSubmitted(false); setEmailValue(''); }} className="absolute top-6 right-6 transition-opacity hover:opacity-60" style={{ color: COLORS.denseNavy }}>
+            <button onClick={() => { setEmailGateOpen(false); setEmailSubmitted(false); }} className="absolute top-6 right-6 transition-opacity hover:opacity-60" style={{ color: COLORS.denseNavy }}>
               <X className="w-5 h-5" strokeWidth={1.5} />
             </button>
 
             {!emailSubmitted ? (
               <>
-                <p className="text-xs tracking-[0.3em] uppercase mb-4 font-semibold" style={{ color: COLORS.sampleTeal }}>Almost there</p>
-                <h3 className="text-2xl md:text-3xl font-light tracking-tight mb-4" style={{ color: COLORS.denseNavy }}>
-                  Where should we send it?
-                </h3>
-                <p className="text-sm font-light mb-10 leading-relaxed" style={{ color: `${COLORS.denseNavy}A0` }}>
-                  We'll email the full breakdown with your inputs and our methodology. No newsletter, no follow-up unless you ask for it.
+                <p className="text-xs tracking-[0.3em] uppercase mb-4 font-semibold" style={{ color: COLORS.sampleTeal }}>
+                  {inSweepstakesWindow ? 'Almost in the drawing' : 'Almost there'}
                 </p>
-                <input type="email" value={emailValue} onChange={(e) => setEmailValue(e.target.value)} placeholder="you@yourlab.com" className="w-full text-base font-light outline-none py-3 mb-10 bg-transparent" style={{ color: COLORS.denseNavy, borderBottom: `1px solid ${COLORS.denseNavy}40` }} />
-                <button onClick={handleHubSpotSubmit} className="w-full flex items-center justify-center gap-3 py-4 transition-all hover:gap-5 group" style={{ backgroundColor: COLORS.denseNavy, color: COLORS.cleanWhite }}>
-                  <span className="text-sm font-light tracking-wide">Send my analysis</span>
+                <h3 className="text-2xl md:text-3xl font-light tracking-tight mb-4" style={{ color: COLORS.denseNavy }}>
+                  {inSweepstakesWindow ? 'Reveal + enter to win.' : 'Reveal your result.'}
+                </h3>
+                <p className="text-sm font-light mb-8 leading-relaxed" style={{ color: `${COLORS.denseNavy}A0` }}>
+                  {inSweepstakesWindow ? (
+                    <>Enter your details to unlock your full analysis and get entered to win <span style={{ color: COLORS.expertGreen, fontWeight: 500 }}>$250</span> at ADLM 2026 in Anaheim. We'll also email you a PDF.</>
+                  ) : (
+                    <>Enter your details to unlock your full analysis. We'll also email you a PDF with the complete methodology. No newsletter, no follow-up unless you ask.</>
+                  )}
+                </p>
+
+                <div className="space-y-5 mb-8">
+                  <div className="grid grid-cols-2 gap-4">
+                    <input
+                      type="text"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      placeholder="First name*"
+                      className="w-full text-base font-light outline-none py-3 bg-transparent"
+                      style={{ color: COLORS.denseNavy, borderBottom: `1px solid ${COLORS.denseNavy}40` }}
+                    />
+                    <input
+                      type="text"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      placeholder="Last name*"
+                      className="w-full text-base font-light outline-none py-3 bg-transparent"
+                      style={{ color: COLORS.denseNavy, borderBottom: `1px solid ${COLORS.denseNavy}40` }}
+                    />
+                  </div>
+                  <input
+                    type="email"
+                    value={emailValue}
+                    onChange={(e) => setEmailValue(e.target.value)}
+                    placeholder="you@yourlab.com*"
+                    className="w-full text-base font-light outline-none py-3 bg-transparent"
+                    style={{ color: COLORS.denseNavy, borderBottom: `1px solid ${COLORS.denseNavy}40` }}
+                  />
+                  <input
+                    type="text"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                    placeholder="Company or lab (optional)"
+                    className="w-full text-base font-light outline-none py-3 bg-transparent"
+                    style={{ color: COLORS.denseNavy, borderBottom: `1px solid ${COLORS.denseNavy}40` }}
+                  />
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (firstName.trim() && lastName.trim() && emailValue.includes('@')) {
+                      submitToHubSpot({ firstName, lastName, email: emailValue, company, inSweepstakesWindow });
+                      setEmailSubmitted(true);
+                      setResultsUnlocked(true);
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-3 py-4 transition-all hover:gap-5 group"
+                  style={{ backgroundColor: COLORS.denseNavy, color: COLORS.cleanWhite }}
+                >
+                  <span className="text-sm font-light tracking-wide">
+                    {inSweepstakesWindow ? 'Reveal + enter to win' : 'Reveal my result'}
+                  </span>
                   <ArrowRight className="w-4 h-4" strokeWidth={1.5} style={{ color: COLORS.testingCyan }} />
                 </button>
+
+                {inSweepstakesWindow && (
+                  <p className="text-xs font-light mt-6 leading-relaxed" style={{ color: `${COLORS.denseNavy}70` }}>
+                    By submitting, you agree to the ADLM 2026 REALx sweepstakes{' '}
+                    <a href={SWEEPSTAKES_RULES_URL} className="underline hover:opacity-70" style={{ color: COLORS.sampleTeal }}>
+                      official rules
+                    </a>
+                    . Prize: $250 gift card. One entry per person.
+                  </p>
+                )}
               </>
             ) : (
               <>
@@ -970,13 +1082,17 @@ export default function UTAKQCCalculator() {
                   <Check className="w-5 h-5" strokeWidth={1.5} style={{ color: COLORS.expertGreen }} />
                 </div>
                 <h3 className="text-2xl md:text-3xl font-light tracking-tight mb-4" style={{ color: COLORS.denseNavy }}>
-                  On its way.
+                  {inSweepstakesWindow ? "You're in the drawing." : 'Unlocked.'}
                 </h3>
                 <p className="text-sm font-light mb-10 leading-relaxed" style={{ color: `${COLORS.denseNavy}A0` }}>
-                  Check your inbox in the next few minutes. If you'd rather talk through it, Andrew is happy to walk through your numbers.
+                  {inSweepstakesWindow ? (
+                    <>Your result is now visible and your entry is logged. We'll notify winners by email after ADLM 2026 wraps. If you'd rather talk through the numbers first, Andrew is happy to walk through them.</>
+                  ) : (
+                    <>Your result is now visible above. Check your inbox for the full PDF. If you'd rather talk through it, Andrew is happy to walk through your numbers.</>
+                  )}
                 </p>
-                <button onClick={() => { setEmailGateOpen(false); setEmailSubmitted(false); setEmailValue(''); }} className="text-sm font-light transition-opacity hover:opacity-60" style={{ color: COLORS.denseNavy }}>
-                  Close
+                <button onClick={() => { setEmailGateOpen(false); }} className="text-sm font-light transition-opacity hover:opacity-60" style={{ color: COLORS.denseNavy }}>
+                  See my result
                 </button>
               </>
             )}
