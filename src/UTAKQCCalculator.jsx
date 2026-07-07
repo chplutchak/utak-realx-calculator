@@ -10,7 +10,7 @@ import { Info, ChevronDown, ArrowRight, Calendar, Mail, X, Check, Sparkles, Lock
 // Form GUID lives in HubSpot → Marketing → Forms → your form → Actions → Embed
 // Look for `formId: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"` in the embed snippet.
 const HUBSPOT_PORTAL_ID = '21153233';
-const HUBSPOT_FORM_GUID = 'REPLACE_WITH_ACTUAL_FORM_GUID'; // TODO
+const HUBSPOT_FORM_GUID = 'df8ea2a5-2252-4ec0-9c2b-ac18418cb109';
 
 // ─── SWEEPSTAKES ─────────────────────────────────────────────────────────────
 // The official rules URL. Replace '#' once the rules page is published.
