@@ -384,9 +384,8 @@ export default function UTAKQCCalculator() {
     const disciplineLabel = DISCIPLINE_DEFAULTS[discipline]?.label || 'Other';
     const labSizeLabel = { small: 'Small', mid: 'Mid', large: 'Large' }[labSize] || labSize;
 
-    // Currency formatter for display fields
-    const money = (n) => `$${Math.round(n).toLocaleString('en-US')}`;
-    const num = (n) => Math.round(n).toLocaleString('en-US');
+    // Raw integer for HubSpot Number-type properties
+    const raw = (n) => String(Math.round(n));
 
     try {
       await fetch(`https://api.hsforms.com/submissions/v3/integration/submit/${HUBSPOT_PORTAL_ID}/${HUBSPOT_FORM_GUID}`, {
@@ -404,24 +403,24 @@ export default function UTAKQCCalculator() {
             // Calculator inputs (what the user selected/entered)
             { name: 'realx_discipline', value: disciplineLabel },
             { name: 'realx_lab_size', value: labSizeLabel },
-            { name: 'realx_lots_per_year', value: String(lots) },
-            { name: 'realx_preps_per_year', value: String(preps) },
-            { name: 'realx_material_cost_per_lot', value: money(materialCost) },
-            { name: 'realx_labor_hours_per_lot', value: String(laborHoursPerLot) },
-            { name: 'realx_number_of_analysts', value: String(people) },
-            { name: 'realx_hourly_rate', value: money(hourlyRate) },
-            { name: 'realx_samples_per_hour', value: String(samplesPerHour) },
-            { name: 'realx_revenue_per_test', value: money(revenuePerTest) },
+            { name: 'realx_lots_per_year', value: raw(lots) },
+            { name: 'realx_preps_per_year', value: raw(preps) },
+            { name: 'realx_material_cost_per_lot', value: raw(materialCost) },
+            { name: 'realx_labor_hours_per_lot', value: raw(laborHoursPerLot) },
+            { name: 'realx_number_of_analysts', value: raw(people) },
+            { name: 'realx_hourly_rate', value: raw(hourlyRate) },
+            { name: 'realx_samples_per_hour', value: raw(samplesPerHour) },
+            { name: 'realx_revenue_per_test', value: raw(revenuePerTest) },
 
             // Calculator results (the math the tool produced)
-            { name: 'realx_true_annual_cost', value: money(results.totalTrueCost) },
-            { name: 'realx_opportunity_cost', value: money(results.opportunityCost) },
-            { name: 'realx_direct_cost', value: money(results.directCost) },
-            { name: 'realx_failure_cost', value: money(results.failureCost) },
-            { name: 'realx_compliance_cost', value: money(results.complianceCost) },
-            { name: 'realx_vendor_training_cost', value: money(results.vendorTrainingCost) },
-            { name: 'realx_total_qc_hours', value: num(results.totalQCHours) },
-            { name: 'realx_samples_not_processed', value: num(results.samplesNotProcessed) }
+            { name: 'realx_true_annual_cost', value: raw(results.totalTrueCost) },
+            { name: 'realx_opportunity_cost', value: raw(results.opportunityCost) },
+            { name: 'realx_direct_cost', value: raw(results.directCost) },
+            { name: 'realx_failure_cost', value: raw(results.failureCost) },
+            { name: 'realx_compliance_cost', value: raw(results.complianceCost) },
+            { name: 'realx_vendor_training_cost', value: raw(results.vendorTrainingCost) },
+            { name: 'realx_total_qc_hours', value: raw(results.totalQCHours) },
+            { name: 'realx_samples_not_processed', value: raw(results.samplesNotProcessed) }
           ],
           context
         })
