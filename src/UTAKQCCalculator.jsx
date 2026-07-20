@@ -14,7 +14,7 @@ const HUBSPOT_FORM_GUID = 'df8ea2a5-2252-4ec0-9c2b-ac18418cb109';
 
 // ─── SWEEPSTAKES ─────────────────────────────────────────────────────────────
 // The official rules URL. Replace '#' once the rules page is published.
-const SWEEPSTAKES_RULES_URL = '#'; // TODO
+const SWEEPSTAKES_RULES_URL = '/sweepstakes-rules.html'; //
 
 // The entry window. Tool automatically detects whether "now" is inside this
 // window and switches between sweepstakes-aware copy and standard copy.
