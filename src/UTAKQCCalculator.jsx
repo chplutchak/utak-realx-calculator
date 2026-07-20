@@ -14,7 +14,7 @@ const HUBSPOT_FORM_GUID = 'df8ea2a5-2252-4ec0-9c2b-ac18418cb109';
 
 // ─── SWEEPSTAKES ─────────────────────────────────────────────────────────────
 // The official rules URL. Replace '#' once the rules page is published.
-const SWEEPSTAKES_RULES_URL = '/sweepstakes-rules.html'; //
+const SWEEPSTAKES_RULES_URL = '/sweepstakes-rules.html';
 
 // The entry window. Tool automatically detects whether "now" is inside this
 // window and switches between sweepstakes-aware copy and standard copy.
@@ -335,7 +335,6 @@ function useAnimatedNumber(value, duration = 600) {
 // ============================================================================
 
 export default function UTAKQCCalculator() {
-  const [previewVersion, setPreviewVersion] = useState('B');
   const [framingView, setFramingView] = useState('roi');
   const [discipline, setDiscipline] = useState('forensic_tox');
   const [labSize, setLabSize] = useState('mid');
@@ -366,6 +365,14 @@ export default function UTAKQCCalculator() {
     const start = new Date(SWEEPSTAKES_START);
     const end = new Date(SWEEPSTAKES_END);
     return now >= start && now <= end;
+  })();
+
+  // Show sweepstakes rules link — visible from pre-launch through the winners-list availability period.
+  // Rules doc lets people request winners list until Sept 1, 2026. We show through Oct 1 for grace.
+  const showSweepstakesRulesLink = (() => {
+    const now = new Date();
+    const end = new Date('2026-10-01T23:59:59');
+    return now <= end;
   })();
 
   // HubSpot form submission
@@ -529,14 +536,6 @@ export default function UTAKQCCalculator() {
           font-variant-numeric: tabular-nums;
         }
       `}</style>
-
-      {/* ============ EDITOR TOGGLE ============ */}
-      <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] tracking-widest uppercase backdrop-blur-md" style={{ backgroundColor: 'rgba(250,250,250,0.85)', border: `1px solid ${COLORS.denseNavy}30` }}>
-        <span style={{ color: `${COLORS.denseNavy}80` }}>Preview:</span>
-        <button onClick={() => setPreviewVersion('A')} className="transition-colors" style={{ color: previewVersion === 'A' ? COLORS.denseNavy : `${COLORS.denseNavy}50` }}>A</button>
-        <span style={{ color: `${COLORS.denseNavy}30` }}>/</span>
-        <button onClick={() => setPreviewVersion('B')} className="transition-colors" style={{ color: previewVersion === 'B' ? COLORS.denseNavy : `${COLORS.denseNavy}50` }}>B</button>
-      </div>
 
       {/* ============ HERO ============ */}
       <section className="relative px-6 md:px-16 pt-28 pb-20 md:pt-40 md:pb-28 max-w-7xl mx-auto overflow-hidden" style={{ width: '100%' }}>
@@ -898,11 +897,11 @@ export default function UTAKQCCalculator() {
             Take this somewhere useful.
           </h2>
           <p className="text-base md:text-lg font-light mt-5 max-w-xl" style={{ color: `${COLORS.denseNavy}A0` }}>
-            Talk through these numbers with your team, or have a conversation with us. Both options are no-pressure.
+            Talk through these numbers with your team. Or if it would help, have a conversation with us. No pressure either way.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6 relative z-10">
+        <div className="max-w-2xl mx-auto relative z-10">
           <a
             href={CALENDLY_URL}
             target="_blank"
@@ -916,7 +915,7 @@ export default function UTAKQCCalculator() {
             </div>
 
             <Calendar className="w-7 h-7 mb-12 relative z-10" strokeWidth={1.2} style={{ color: COLORS.testingCyan }} />
-            <p className="text-xs tracking-[0.3em] uppercase mb-4 font-semibold relative z-10" style={{ color: COLORS.testingCyan }}>Option A · 30 min</p>
+            <p className="text-xs tracking-[0.3em] uppercase mb-4 font-semibold relative z-10" style={{ color: COLORS.testingCyan }}>30 min · No pitch</p>
             <h3 className="text-2xl md:text-3xl font-light tracking-tight mb-5 relative z-10">
               Walk through it with Andrew
             </h3>
@@ -928,30 +927,6 @@ export default function UTAKQCCalculator() {
               <ArrowRight className="w-4 h-4" strokeWidth={1.5} style={{ color: COLORS.testingCyan }} />
             </div>
           </a>
-
-          <button
-            onClick={() => setEmailGateOpen(true)}
-            className="group relative overflow-hidden p-10 md:p-12 transition-all duration-500 cursor-pointer text-left"
-            style={{ backgroundColor: COLORS.cleanWhite, border: `1px solid ${COLORS.denseNavy}25` }}
-          >
-            <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full opacity-15 group-hover:opacity-25 transition-opacity duration-500" style={{ backgroundColor: COLORS.expertGreen, filter: 'blur(20px)' }} />
-            <div className="absolute top-8 right-8 opacity-15 group-hover:opacity-25 transition-opacity duration-500">
-              <MethamphetamineStructure stroke={COLORS.sampleTeal} size={140} />
-            </div>
-
-            <Mail className="w-7 h-7 mb-12 relative z-10" strokeWidth={1.2} style={{ color: COLORS.denseNavy }} />
-            <p className="text-xs tracking-[0.3em] uppercase mb-4 font-semibold relative z-10" style={{ color: `${COLORS.denseNavy}80` }}>Option B · PDF</p>
-            <h3 className="text-2xl md:text-3xl font-light tracking-tight mb-5 relative z-10" style={{ color: COLORS.denseNavy }}>
-              Send the full breakdown
-            </h3>
-            <p className="text-sm font-light mb-10 max-w-sm leading-relaxed relative z-10" style={{ color: `${COLORS.denseNavy}A0` }}>
-              We'll email a PDF with your inputs, the calculations, and the full methodology. No newsletter signup. No follow-up unless you ask.
-            </p>
-            <div className="flex items-center gap-3 transition-all duration-500 group-hover:gap-5 relative z-10" style={{ color: COLORS.denseNavy }}>
-              <span className="text-sm font-light tracking-wide">Send to my inbox</span>
-              <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
-            </div>
-          </button>
         </div>
       </section>
 
@@ -1022,9 +997,16 @@ export default function UTAKQCCalculator() {
               </p>
             </div>
           </div>
-          <p className="text-xs font-light">
-            v5 · Updated {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-          </p>
+          <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-6">
+            {showSweepstakesRulesLink && (
+              <a href={SWEEPSTAKES_RULES_URL} className="text-xs font-light underline transition-opacity hover:opacity-70" style={{ color: COLORS.testingCyan }}>
+                ADLM 2026 Sweepstakes rules
+              </a>
+            )}
+            <p className="text-xs font-light">
+              v5 · Updated {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </p>
+          </div>
         </div>
       </footer>
 
