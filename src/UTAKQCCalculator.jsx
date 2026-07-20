@@ -370,19 +370,60 @@ export default function UTAKQCCalculator() {
 
   // HubSpot form submission
   const submitToHubSpot = async ({ firstName, lastName, email, company, inSweepstakesWindow }) => {
+    // Read hubspotutk cookie so submissions link back to the contact's prior activity
+    const hutkMatch = document.cookie.match(/(?:^|;\s*)hubspotutk=([^;]+)/);
+    const hutk = hutkMatch ? hutkMatch[1] : undefined;
+
+    const context = {
+      pageUri: window.location.href,
+      pageName: 'REAL X Calculator'
+    };
+    if (hutk) context.hutk = hutk;
+
+    // Human-readable labels for dropdowns
+    const disciplineLabel = DISCIPLINE_DEFAULTS[discipline]?.label || 'Other';
+    const labSizeLabel = { small: 'Small', mid: 'Mid', large: 'Large' }[labSize] || labSize;
+
+    // Currency formatter for display fields
+    const money = (n) => `$${Math.round(n).toLocaleString('en-US')}`;
+    const num = (n) => Math.round(n).toLocaleString('en-US');
+
     try {
       await fetch(`https://api.hsforms.com/submissions/v3/integration/submit/${HUBSPOT_PORTAL_ID}/${HUBSPOT_FORM_GUID}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fields: [
+            // Identity
             { name: 'firstname', value: firstName },
             { name: 'lastname', value: lastName },
             { name: 'email', value: email },
             { name: 'company', value: company || '' },
-            { name: 'entry_source', value: inSweepstakesWindow ? 'REALx - ADLM 2026 Sweepstakes' : 'REALx - Standard' }
+            { name: 'entry_source', value: inSweepstakesWindow ? 'REALx - ADLM 2026 Sweepstakes' : 'REALx - Standard' },
+
+            // Calculator inputs (what the user selected/entered)
+            { name: 'realx_discipline', value: disciplineLabel },
+            { name: 'realx_lab_size', value: labSizeLabel },
+            { name: 'realx_lots_per_year', value: String(lots) },
+            { name: 'realx_preps_per_year', value: String(preps) },
+            { name: 'realx_material_cost_per_lot', value: money(materialCost) },
+            { name: 'realx_labor_hours_per_lot', value: String(laborHoursPerLot) },
+            { name: 'realx_number_of_analysts', value: String(people) },
+            { name: 'realx_hourly_rate', value: money(hourlyRate) },
+            { name: 'realx_samples_per_hour', value: String(samplesPerHour) },
+            { name: 'realx_revenue_per_test', value: money(revenuePerTest) },
+
+            // Calculator results (the math the tool produced)
+            { name: 'realx_true_annual_cost', value: money(results.totalTrueCost) },
+            { name: 'realx_opportunity_cost', value: money(results.opportunityCost) },
+            { name: 'realx_direct_cost', value: money(results.directCost) },
+            { name: 'realx_failure_cost', value: money(results.failureCost) },
+            { name: 'realx_compliance_cost', value: money(results.complianceCost) },
+            { name: 'realx_vendor_training_cost', value: money(results.vendorTrainingCost) },
+            { name: 'realx_total_qc_hours', value: num(results.totalQCHours) },
+            { name: 'realx_samples_not_processed', value: num(results.samplesNotProcessed) }
           ],
-          context: { pageUri: window.location.href, pageName: 'REAL X Calculator' }
+          context
         })
       });
     } catch (err) {
