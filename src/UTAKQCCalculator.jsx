@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Info, ChevronDown, ArrowRight, Calendar, Mail, X, Check, Sparkles, Lock } from 'lucide-react';
+import { Info, ChevronDown, ArrowRight, Calendar, Mail, X, Check, Sparkles } from 'lucide-react';
 
 // ============================================================================
 // CONFIGURATION — update these values as needed
@@ -972,16 +972,9 @@ export default function UTAKQCCalculator() {
               </p>
             </div>
           </div>
-          <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-6">
-            {showSweepstakesRulesLink && (
-              <a href={SWEEPSTAKES_RULES_URL} className="text-xs font-light underline transition-opacity hover:opacity-70" style={{ color: COLORS.testingCyan }}>
-                ADLM 2026 Sweepstakes rules
-              </a>
-            )}
-            <p className="text-xs font-light">
-              v5 · Updated {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            </p>
-          </div>
+          <p className="text-xs font-light">
+            v5 · Updated {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          </p>
         </div>
       </footer>
 
