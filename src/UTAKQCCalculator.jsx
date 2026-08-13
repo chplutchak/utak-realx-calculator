@@ -12,15 +12,6 @@ import { Info, ChevronDown, ArrowRight, Calendar, Mail, X, Check, Sparkles, Lock
 const HUBSPOT_PORTAL_ID = '21153233';
 const HUBSPOT_FORM_GUID = 'df8ea2a5-2252-4ec0-9c2b-ac18418cb109';
 
-// ─── SWEEPSTAKES ─────────────────────────────────────────────────────────────
-// The official rules URL. Replace '#' once the rules page is published.
-const SWEEPSTAKES_RULES_URL = '/sweepstakes-rules.html';
-
-// The entry window. Tool automatically detects whether "now" is inside this
-// window and switches between sweepstakes-aware copy and standard copy.
-const SWEEPSTAKES_START = '2026-07-26T00:00:00';
-const SWEEPSTAKES_END = '2026-07-30T23:59:59';
-
 // ─── OUTREACH ────────────────────────────────────────────────────────────────
 // Andrew's Calendly link for the "Walk through it with Andrew" CTA.
 const CALENDLY_URL = 'https://calendly.com/ahartmann-utak/30min';
@@ -357,26 +348,9 @@ export default function UTAKQCCalculator() {
   const [lastName, setLastName] = useState('');
   const [company, setCompany] = useState('');
   const [emailSubmitted, setEmailSubmitted] = useState(false);
-  const [resultsUnlocked, setResultsUnlocked] = useState(false);
-
-  // Sweepstakes window detection — ADLM 2026 in Anaheim, July 26 through 30
-  const inSweepstakesWindow = (() => {
-    const now = new Date();
-    const start = new Date(SWEEPSTAKES_START);
-    const end = new Date(SWEEPSTAKES_END);
-    return now >= start && now <= end;
-  })();
-
-  // Show sweepstakes rules link — visible from pre-launch through the winners-list availability period.
-  // Rules doc lets people request winners list until Sept 1, 2026. We show through Oct 1 for grace.
-  const showSweepstakesRulesLink = (() => {
-    const now = new Date();
-    const end = new Date('2026-10-01T23:59:59');
-    return now <= end;
-  })();
 
   // HubSpot form submission
-  const submitToHubSpot = async ({ firstName, lastName, email, company, inSweepstakesWindow }) => {
+  const submitToHubSpot = async ({ firstName, lastName, email, company }) => {
     // Read hubspotutk cookie so submissions link back to the contact's prior activity
     const hutkMatch = document.cookie.match(/(?:^|;\s*)hubspotutk=([^;]+)/);
     const hutk = hutkMatch ? hutkMatch[1] : undefined;
@@ -405,7 +379,7 @@ export default function UTAKQCCalculator() {
             { name: 'lastname', value: lastName },
             { name: 'email', value: email },
             { name: 'company', value: company || '' },
-            { name: 'entry_source', value: inSweepstakesWindow ? 'REALx - ADLM 2026 Sweepstakes' : 'REALx - Standard' },
+            { name: 'entry_source', value: 'REALx - Standard' },
 
             // Calculator inputs (what the user selected/entered)
             { name: 'realx_discipline', value: disciplineLabel },
@@ -703,8 +677,8 @@ export default function UTAKQCCalculator() {
               <p className="text-xs tracking-[0.3em] uppercase mb-8 font-semibold" style={{ color: COLORS.testingCyan }}>
                 True Annual Cost
               </p>
-              <p className="number-display text-6xl md:text-8xl font-extralight tracking-tighter mb-6" style={{ color: resultsUnlocked ? COLORS.cleanWhite : `${COLORS.cleanWhite}30` }}>
-                {resultsUnlocked ? `$${animatedTotal.toLocaleString('en-US')}` : '$———'}
+              <p className="number-display text-6xl md:text-8xl font-extralight tracking-tighter mb-6" style={{ color: COLORS.cleanWhite }}>
+                ${animatedTotal.toLocaleString('en-US')}
               </p>
               <p className="text-sm font-light leading-relaxed max-w-sm" style={{ color: `${COLORS.cleanWhite}B0` }}>
                 Materials, labor, rework, compliance, and vendor management. All of it, across the year.
@@ -715,37 +689,14 @@ export default function UTAKQCCalculator() {
               <p className="text-xs tracking-[0.3em] uppercase mb-8 font-semibold" style={{ color: COLORS.expertGreen }}>
                 Opportunity Cost
               </p>
-              <p className="number-display text-6xl md:text-8xl font-extralight tracking-tighter mb-6" style={{ color: resultsUnlocked ? COLORS.cleanWhite : `${COLORS.cleanWhite}30` }}>
-                {resultsUnlocked ? `$${animatedOpp.toLocaleString('en-US')}` : '$———'}
+              <p className="number-display text-6xl md:text-8xl font-extralight tracking-tighter mb-6" style={{ color: COLORS.cleanWhite }}>
+                ${animatedOpp.toLocaleString('en-US')}
               </p>
               <p className="text-sm font-light leading-relaxed max-w-sm" style={{ color: `${COLORS.cleanWhite}B0` }}>
-                Revenue your team could have generated if those <span style={{ color: COLORS.expertGreen, fontWeight: 500 }}>{resultsUnlocked ? results.totalQCHours.toLocaleString() : '———'} hours</span> went to billable testing.
+                Revenue your team could have generated if those <span style={{ color: COLORS.expertGreen, fontWeight: 500 }}>{results.totalQCHours.toLocaleString()} hours</span> went to billable testing.
               </p>
             </div>
           </div>
-
-          {/* Reveal CTA (only when locked) */}
-          {!resultsUnlocked && (
-            <div className="mb-12 md:mb-16 fade-up">
-              <button
-                onClick={() => setEmailGateOpen(true)}
-                className="group inline-flex items-center gap-4 px-8 py-5 transition-all hover:gap-6"
-                style={{ backgroundColor: COLORS.sampleTeal, color: COLORS.denseNavy }}
-              >
-                <Lock className="w-4 h-4" strokeWidth={2} />
-                <span className="text-sm tracking-widest uppercase font-semibold">
-                  {inSweepstakesWindow ? 'Reveal your result + enter to win $250' : 'Reveal your result'}
-                </span>
-                <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
-              </button>
-              {inSweepstakesWindow && (
-                <p className="text-xs font-light mt-4 max-w-md" style={{ color: `${COLORS.cleanWhite}70` }}>
-                  Open to ADLM 2026 attendees and remote entrants. One entry per person.{' '}
-                  <a href={SWEEPSTAKES_RULES_URL} className="underline hover:opacity-80" style={{ color: COLORS.testingCyan }}>Official rules</a>.
-                </p>
-              )}
-            </div>
-          )}
 
           <div className="relative p-8 md:p-10" style={{ border: `1px solid ${COLORS.sampleTeal}80`, backgroundColor: `${COLORS.sampleTeal}15`, backdropFilter: 'blur(8px)' }}>
             <div className="flex items-start gap-4">
@@ -901,7 +852,7 @@ export default function UTAKQCCalculator() {
           </p>
         </div>
 
-        <div className="max-w-2xl mx-auto relative z-10">
+        <div className="grid md:grid-cols-2 gap-6 relative z-10">
           <a
             href={CALENDLY_URL}
             target="_blank"
@@ -927,6 +878,30 @@ export default function UTAKQCCalculator() {
               <ArrowRight className="w-4 h-4" strokeWidth={1.5} style={{ color: COLORS.testingCyan }} />
             </div>
           </a>
+
+          <button
+            onClick={() => setEmailGateOpen(true)}
+            className="group relative overflow-hidden p-10 md:p-12 transition-all duration-500 cursor-pointer text-left"
+            style={{ backgroundColor: COLORS.cleanWhite, border: `1px solid ${COLORS.denseNavy}25` }}
+          >
+            <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full opacity-15 group-hover:opacity-25 transition-opacity duration-500" style={{ backgroundColor: COLORS.expertGreen, filter: 'blur(20px)' }} />
+            <div className="absolute top-8 right-8 opacity-15 group-hover:opacity-25 transition-opacity duration-500">
+              <MethamphetamineStructure stroke={COLORS.sampleTeal} size={140} />
+            </div>
+
+            <Mail className="w-7 h-7 mb-12 relative z-10" strokeWidth={1.2} style={{ color: COLORS.denseNavy }} />
+            <p className="text-xs tracking-[0.3em] uppercase mb-4 font-semibold relative z-10" style={{ color: `${COLORS.denseNavy}80` }}>Optional · PDF</p>
+            <h3 className="text-2xl md:text-3xl font-light tracking-tight mb-5 relative z-10" style={{ color: COLORS.denseNavy }}>
+              Send it to my inbox
+            </h3>
+            <p className="text-sm font-light mb-10 max-w-sm leading-relaxed relative z-10" style={{ color: `${COLORS.denseNavy}A0` }}>
+              We'll email you the full analysis, including the methodology and your inputs, so you can share it or come back to it later. No newsletter signup.
+            </p>
+            <div className="flex items-center gap-3 transition-all duration-500 group-hover:gap-5 relative z-10" style={{ color: COLORS.denseNavy }}>
+              <span className="text-sm font-light tracking-wide">Get the PDF</span>
+              <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
+            </div>
+          </button>
         </div>
       </section>
 
@@ -1021,17 +996,13 @@ export default function UTAKQCCalculator() {
             {!emailSubmitted ? (
               <>
                 <p className="text-xs tracking-[0.3em] uppercase mb-4 font-semibold" style={{ color: COLORS.sampleTeal }}>
-                  {inSweepstakesWindow ? 'Almost in the drawing' : 'Almost there'}
+                  Optional
                 </p>
                 <h3 className="text-2xl md:text-3xl font-light tracking-tight mb-4" style={{ color: COLORS.denseNavy }}>
-                  {inSweepstakesWindow ? 'Reveal + enter to win.' : 'Reveal your result.'}
+                  Send the analysis to your inbox.
                 </h3>
                 <p className="text-sm font-light mb-8 leading-relaxed" style={{ color: `${COLORS.denseNavy}A0` }}>
-                  {inSweepstakesWindow ? (
-                    <>Enter your details to unlock your full analysis and get entered to win <span style={{ color: COLORS.expertGreen, fontWeight: 500 }}>$250</span> at ADLM 2026 in Anaheim. We'll also email you a PDF.</>
-                  ) : (
-                    <>Enter your details to unlock your full analysis. We'll also email you a PDF with the complete methodology. No newsletter, no follow-up unless you ask.</>
-                  )}
+                  We'll email you the full breakdown with your inputs and the complete methodology, so you can share it or come back to it. No newsletter, no follow-up unless you ask.
                 </p>
 
                 <div className="space-y-5 mb-8">
@@ -1074,29 +1045,18 @@ export default function UTAKQCCalculator() {
                 <button
                   onClick={() => {
                     if (firstName.trim() && lastName.trim() && emailValue.includes('@')) {
-                      submitToHubSpot({ firstName, lastName, email: emailValue, company, inSweepstakesWindow });
+                      submitToHubSpot({ firstName, lastName, email: emailValue, company });
                       setEmailSubmitted(true);
-                      setResultsUnlocked(true);
                     }
                   }}
                   className="w-full flex items-center justify-center gap-3 py-4 transition-all hover:gap-5 group"
                   style={{ backgroundColor: COLORS.denseNavy, color: COLORS.cleanWhite }}
                 >
                   <span className="text-sm font-light tracking-wide">
-                    {inSweepstakesWindow ? 'Reveal + enter to win' : 'Reveal my result'}
+                    Send to my inbox
                   </span>
                   <ArrowRight className="w-4 h-4" strokeWidth={1.5} style={{ color: COLORS.testingCyan }} />
                 </button>
-
-                {inSweepstakesWindow && (
-                  <p className="text-xs font-light mt-6 leading-relaxed" style={{ color: `${COLORS.denseNavy}70` }}>
-                    By submitting, you agree to the ADLM 2026 REALx sweepstakes{' '}
-                    <a href={SWEEPSTAKES_RULES_URL} className="underline hover:opacity-70" style={{ color: COLORS.sampleTeal }}>
-                      official rules
-                    </a>
-                    . Prize: $250 gift card. One entry per person.
-                  </p>
-                )}
               </>
             ) : (
               <>
@@ -1104,17 +1064,13 @@ export default function UTAKQCCalculator() {
                   <Check className="w-5 h-5" strokeWidth={1.5} style={{ color: COLORS.expertGreen }} />
                 </div>
                 <h3 className="text-2xl md:text-3xl font-light tracking-tight mb-4" style={{ color: COLORS.denseNavy }}>
-                  {inSweepstakesWindow ? "You're in the drawing." : 'Unlocked.'}
+                  On its way.
                 </h3>
                 <p className="text-sm font-light mb-10 leading-relaxed" style={{ color: `${COLORS.denseNavy}A0` }}>
-                  {inSweepstakesWindow ? (
-                    <>Your result is now visible and your entry is logged. We'll notify winners by email after ADLM 2026 wraps. If you'd rather talk through the numbers first, Andrew is happy to walk through them.</>
-                  ) : (
-                    <>Your result is now visible above. Check your inbox for the full PDF. If you'd rather talk through it, Andrew is happy to walk through your numbers.</>
-                  )}
+                  Check your inbox in a few minutes for the full analysis. If you'd rather talk through it, Andrew is happy to walk through your numbers.
                 </p>
                 <button onClick={() => { setEmailGateOpen(false); }} className="text-sm font-light transition-opacity hover:opacity-60" style={{ color: COLORS.denseNavy }}>
-                  See my result
+                  Close
                 </button>
               </>
             )}
