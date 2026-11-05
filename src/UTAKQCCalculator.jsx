@@ -38,11 +38,37 @@ const COLORS = {
 // RESEARCH-BACKED CONSTANTS
 // ============================================================================
 const FAILURE_RATE = 0.12;
-const COMPLIANCE_HOURS_BY_SIZE = {
-  small: 60,   // Basic CAP prep, minimum CLIA docs, single analyst
-  mid: 100,    // Independent/hospital lab — moderate documentation load
-  large: 140   // Reference labs, multiple inspections, tighter documentation
-};
+// Compliance hours that are SPECIFIC to in-house QC manufacturing.
+// Only counts work that would not exist if QC were outsourced:
+// stability validation, lot release docs, parallel comparison to prior lots,
+// product-specific deviation and CAPA tracking.
+// Excludes lab-wide compliance infrastructure (CAP inspection prep, CLIA
+// documentation, QA systems, policies) which exists regardless of QC source.
+// Midpoint of 5-10 hour range based on CLSI QMS03 release documentation
+// requirements and field observation from BD conversations.
+const COMPLIANCE_HOURS_PER_QC_PRODUCT_LINE = 8;
+
+// ─── OPPORTUNITY COST REALISM FACTORS ────────────────────────────────────────
+// These discount the raw theoretical opportunity cost to a defensible estimate.
+// Raw opportunity cost assumes 100% hour conversion, peak throughput, and gross
+// reimbursement — all three are optimistic. The realism factors below adjust
+// for what actually happens in practice.
+//
+// HOUR_CONVERSION_FACTOR: Share of freed QC hours that actually convert to
+// patient testing work. The rest go to documentation catch-up, QA meetings,
+// bench cleanup, cross-training, and other non-billable activity.
+const HOUR_CONVERSION_FACTOR = 0.65;
+
+// THROUGHPUT_FACTOR: Sustained throughput vs. peak throughput. User-entered
+// samples/hour is usually a peak rate. Instrument downtime, calibration,
+// repeat runs, and admin bring sustained throughput below peak.
+const THROUGHPUT_FACTOR = 0.70;
+
+// NET_REVENUE_FACTOR: Realized revenue per test vs. gross reimbursement.
+// Accounts for denials, payer mix (Medicare/Medicaid vs. commercial),
+// write-offs, repeats, and samples that never bill.
+const NET_REVENUE_FACTOR = 0.70;
+
 const TRAINING_HOURS_PER_PREP_PER_PERSON = 6;
 const VENDOR_MGMT_HOURS_PER_PREP = 6;
 
@@ -435,7 +461,10 @@ export default function UTAKQCCalculator() {
     const laborCostPerLot = laborHoursPerLot * hourlyRate;
 
     // Compliance hours scale with lab size
-    const complianceHours = COMPLIANCE_HOURS_BY_SIZE[labSize] || 100;
+    // Compliance scales with number of distinct QC product lines, not lab size.
+    // Lab-wide compliance infrastructure is excluded because it exists whether
+    // QC is made in-house or outsourced.
+    const complianceHours = preps * COMPLIANCE_HOURS_PER_QC_PRODUCT_LINE;
 
     const annualMaterialCost = lots * materialCost;
     const annualLaborCost = lots * laborCostPerLot;
@@ -447,22 +476,38 @@ export default function UTAKQCCalculator() {
     const vendorTrainingCost = trainingCost + vendorMgmtCost;
     const totalTrueCost = directCost + failureCost + complianceCost + vendorTrainingCost;
 
-    // Opportunity cost: labor hours per lot is now a direct input
+    // Opportunity cost — with realism factors (hour conversion, throughput, net revenue)
     const annualLaborHoursOnPrep = lots * laborHoursPerLot;
-    const overheadHours = complianceHours +
-      (preps * people * TRAINING_HOURS_PER_PREP_PER_PERSON) +
-      (preps * VENDOR_MGMT_HOURS_PER_PREP);
+    const trainingHours = preps * people * TRAINING_HOURS_PER_PREP_PER_PERSON;
+    const vendorHours = preps * VENDOR_MGMT_HOURS_PER_PREP;
+    const overheadHours = complianceHours + trainingHours + vendorHours;
     const totalQCHours = annualLaborHoursOnPrep + overheadHours;
-    const samplesNotProcessed = totalQCHours * samplesPerHour;
-    const opportunityCost = samplesNotProcessed * revenuePerTest;
+
+    // Theoretical max (shown as subtitle context)
+    const samplesNotProcessedRaw = totalQCHours * samplesPerHour;
+    const opportunityCostRaw = samplesNotProcessedRaw * revenuePerTest;
+
+    // Realistic figures (headline)
+    const samplesNotProcessed = samplesNotProcessedRaw * HOUR_CONVERSION_FACTOR * THROUGHPUT_FACTOR;
+    const opportunityCost = opportunityCostRaw * HOUR_CONVERSION_FACTOR * THROUGHPUT_FACTOR * NET_REVENUE_FACTOR;
+
+    // Per-component values for True Annual Cost breakdown
+    const annualMaterialCostLine = lots * materialCost;
+    const annualLaborCostLine = lots * laborCostPerLot;
+    const otherOverheadCost = complianceCost + (trainingHours * hourlyRate) + (vendorHours * hourlyRate);
 
     return {
       directCost, failureCost, complianceCost, vendorTrainingCost,
-      totalTrueCost, opportunityCost,
+      totalTrueCost, opportunityCost, opportunityCostRaw,
       totalQCHours: Math.round(totalQCHours),
       samplesNotProcessed: Math.round(samplesNotProcessed),
+      samplesNotProcessedRaw: Math.round(samplesNotProcessedRaw),
       laborCostPerLot: Math.round(laborCostPerLot),
-      complianceHours
+      complianceHours,
+      annualLaborHoursOnPrep: Math.round(annualLaborHoursOnPrep),
+      annualMaterialCostLine: Math.round(annualMaterialCostLine),
+      annualLaborCostLine: Math.round(annualLaborCostLine),
+      otherOverheadCost: Math.round(otherOverheadCost)
     };
   }, [lots, preps, materialCost, laborHoursPerLot, people, hourlyRate, samplesPerHour, revenuePerTest, labSize]);
 
@@ -673,6 +718,8 @@ export default function UTAKQCCalculator() {
           </div>
 
           <div className="grid md:grid-cols-2 gap-12 md:gap-16 mb-12 md:mb-16">
+
+            {/* ======== LEFT COLUMN: True Annual Cost ======== */}
             <div>
               <p className="text-xs tracking-[0.3em] uppercase mb-8 font-semibold" style={{ color: COLORS.testingCyan }}>
                 True Annual Cost
@@ -680,20 +727,68 @@ export default function UTAKQCCalculator() {
               <p className="number-display text-6xl md:text-8xl font-extralight tracking-tighter mb-6" style={{ color: COLORS.cleanWhite }}>
                 ${animatedTotal.toLocaleString('en-US')}
               </p>
-              <p className="text-sm font-light leading-relaxed max-w-sm" style={{ color: `${COLORS.cleanWhite}B0` }}>
+              <p className="text-sm font-light leading-relaxed max-w-sm mb-8" style={{ color: `${COLORS.cleanWhite}B0` }}>
                 Materials, labor, rework, compliance, and vendor management. All of it, across the year.
               </p>
+
+              {/* Stacked breakdown */}
+              <div className="max-w-sm space-y-2 text-sm font-light">
+                <div className="flex justify-between items-baseline gap-6" style={{ color: `${COLORS.cleanWhite}B3` }}>
+                  <span>Materials</span>
+                  <span style={{ color: COLORS.cleanWhite, fontVariantNumeric: 'tabular-nums' }}>${results.annualMaterialCostLine.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-baseline gap-6" style={{ color: `${COLORS.cleanWhite}B3` }}>
+                  <span>Labor</span>
+                  <span style={{ color: COLORS.cleanWhite, fontVariantNumeric: 'tabular-nums' }}>${results.annualLaborCostLine.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-baseline gap-6" style={{ color: `${COLORS.cleanWhite}B3` }}>
+                  <span>Rework (12% failure)</span>
+                  <span style={{ color: COLORS.cleanWhite, fontVariantNumeric: 'tabular-nums' }}>${Math.round(results.failureCost).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-baseline gap-6" style={{ color: `${COLORS.cleanWhite}B3` }}>
+                  <span>Compliance + overhead</span>
+                  <span style={{ color: COLORS.cleanWhite, fontVariantNumeric: 'tabular-nums' }}>${results.otherOverheadCost.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-baseline gap-6 pt-3 mt-2 font-medium" style={{ borderTop: `1px solid ${COLORS.cleanWhite}30`, color: COLORS.cleanWhite }}>
+                  <span>Total</span>
+                  <span style={{ color: COLORS.testingCyan, fontVariantNumeric: 'tabular-nums' }}>${Math.round(results.totalTrueCost).toLocaleString()}</span>
+                </div>
+              </div>
             </div>
 
+            {/* ======== RIGHT COLUMN: Opportunity Cost ======== */}
             <div className="md:border-l md:pl-16" style={{ borderColor: `${COLORS.cleanWhite}25` }}>
               <p className="text-xs tracking-[0.3em] uppercase mb-8 font-semibold" style={{ color: COLORS.expertGreen }}>
                 Opportunity Cost
               </p>
-              <p className="number-display text-6xl md:text-8xl font-extralight tracking-tighter mb-6" style={{ color: COLORS.cleanWhite }}>
+              <p className="number-display text-6xl md:text-8xl font-extralight tracking-tighter mb-3" style={{ color: COLORS.cleanWhite }}>
                 ${animatedOpp.toLocaleString('en-US')}
               </p>
-              <p className="text-sm font-light leading-relaxed max-w-sm" style={{ color: `${COLORS.cleanWhite}B0` }}>
-                Revenue your team could have generated if those <span style={{ color: COLORS.expertGreen, fontWeight: 500 }}>{results.totalQCHours.toLocaleString()} hours</span> went to billable testing.
+              <p className="text-xs font-light mb-6" style={{ color: `${COLORS.cleanWhite}70` }}>
+                Theoretical maximum: ${Math.round(results.opportunityCostRaw).toLocaleString('en-US')}
+              </p>
+              <p className="text-sm font-light leading-relaxed max-w-sm mb-8" style={{ color: `${COLORS.cleanWhite}B0` }}>
+                Realistic estimate of revenue those <span style={{ color: COLORS.expertGreen, fontWeight: 500 }}>{results.totalQCHours.toLocaleString()} QC hours</span> could have generated — assuming your bench is capacity-constrained.
+              </p>
+
+              {/* Stacked breakdown */}
+              <div className="max-w-sm space-y-2 text-sm font-light">
+                <div className="flex justify-between items-baseline gap-6" style={{ color: `${COLORS.cleanWhite}B3` }}>
+                  <span>QC hours this year</span>
+                  <span style={{ color: COLORS.cleanWhite, fontVariantNumeric: 'tabular-nums' }}>{results.totalQCHours.toLocaleString()} hrs</span>
+                </div>
+                <div className="flex justify-between items-baseline gap-6" style={{ color: `${COLORS.cleanWhite}B3` }}>
+                  <span>Realistic patient samples</span>
+                  <span style={{ color: COLORS.cleanWhite, fontVariantNumeric: 'tabular-nums' }}>{results.samplesNotProcessed.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-baseline gap-6 pt-3 mt-2 font-medium" style={{ borderTop: `1px solid ${COLORS.cleanWhite}30`, color: COLORS.cleanWhite }}>
+                  <span>Revenue at ${revenuePerTest} per test</span>
+                  <span style={{ color: COLORS.expertGreen, fontVariantNumeric: 'tabular-nums' }}>${Math.round(results.opportunityCost).toLocaleString()}</span>
+                </div>
+              </div>
+
+              <p className="text-xs font-light italic leading-relaxed max-w-sm mt-6" style={{ color: `${COLORS.cleanWhite}70` }}>
+                Realistic numbers reflect three adjustments: 65% of freed QC hours convert to billable work (the rest go to documentation, meetings, and other non-testing tasks), 70% sustained throughput, and 70% net reimbursement after denials and payer mix.
               </p>
             </div>
           </div>
@@ -931,10 +1026,10 @@ export default function UTAKQCCalculator() {
                 'Peer-reviewed Sigma metrics studies show ~26% of clinical chemistry test applications fall below three-sigma minimum performance. We use 12% as a conservative midpoint for in-house QC prep failure attributable to operator, reconstitution, and storage errors.',
                 'Source: Westgard publications on lab sigma performance benchmarking.'
               ]} />
-              <SourceItem superscript="³" title={`Compliance (${results.complianceHours} hrs/year, scaled to lab size)`} formula={`${results.complianceHours} hours × fully loaded hourly rate`} sources={[
-                'CAP Laboratory Accreditation Program: biennial inspections, 3 to 4 month pre-inspection planning, advance document review, and ongoing checklist compliance.',
-                'CLIA (42 CFR Part 493) documentation requirements including 2-year retention of temperature logs and corrective action records.',
-                'Compliance overhead scales with lab size: small labs 60 hrs/year, mid-size 100 hrs/year, reference labs 140 hrs/year. Small labs run lighter documentation loads than large reference operations like Arup or Quest.'
+              <SourceItem superscript="³" title={`Compliance (${results.complianceHours} hrs/year, scaled by QC product lines)`} formula={`${results.complianceHours} hours × fully loaded hourly rate`} sources={[
+                'Captures only compliance work specific to in-house QC manufacturing: stability validation studies, lot release testing documentation, parallel comparison to prior lots, and product-specific deviation and CAPA tracking.',
+                'CLSI QMS03 lot release documentation requirements per QC product line.',
+                'Excludes lab-wide compliance infrastructure (CAP inspection prep, CLIA documentation, QA systems, policies) which exists whether QC is manufactured in-house or outsourced. 8 hours per QC product line per year.'
               ]} />
               <SourceItem superscript="⁴" title="Vendor & Training" formula="(Preps × 6 hrs × people × rate) + (Preps × 6 hrs × rate)" sources={[
                 'CLSI QMS03 Training and Competence Assessment, 4th Edition: framework for personnel competency.',
